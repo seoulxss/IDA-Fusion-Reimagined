@@ -26,6 +26,13 @@ int main() {
   CHECK(!parse("48 ZZ", p, err));
   CHECK(!parse("48 123", p, err));
 
+  // extra notations accepted by the search
+  CHECK(parse("48895C24", p, err) && p.size() == 4 && p.bytes[2] == 0x5C);
+  CHECK(parse("{ 0x48, 0x89, 0x5C, 0x24 };", p, err) && p.size() == 4 && p.bytes[3] == 0x24);
+  CHECK(parse("b\"\\x48\\x89\\x00\"", p, err) && p.size() == 3 && p.fixed[2] == 0);
+  CHECK(parse("48 89 ?? ?? 24", p, err) && p.size() == 5 && p.fixed[2] == 0);
+  CHECK(!parse("48895", p, err));   // odd run of digits
+
   // search
   std::vector<uint8_t> mem(4096, 0x90);
   mem[100] = 0x48; mem[101] = 0x8B; mem[102] = 0x11; mem[103] = 0x22; mem[104] = 0x05;
@@ -90,7 +97,12 @@ int main() {
       ++items;
       i = end + 1;
     }
-    CHECK(items == 10 && radios == 8 && checks == 2);
+    CHECK(items == 9 && radios == 0 && checks == 9);
+    CHECK(form.find("%/") != std::string::npos);                                  // form-change callback
+    CHECK(fusion::DIALOG_OUTPUT_COUNT == 7);
+    size_t button_no = form.find("BUTTON NO ");
+    CHECK(button_no != std::string::npos);
+    CHECK(form.substr(button_no, form.find('\n', button_no) - button_no).find(':') == std::string::npos);
     // one closed group per type: the last item of each group is followed by a second '>'
     size_t closers = 0;
     for (size_t i = 0; (i = form.find(">>", i)) != std::string::npos; i += 2)

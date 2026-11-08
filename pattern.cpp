@@ -136,7 +136,22 @@ bool parse(const char* text, pattern_t& out, std::string& error) {
   out = pattern_t();
   error.clear();
 
-  std::string s = text ? text : "";
+  // Tolerate how signatures get pasted around: quotes (python b"..."), braces and
+  // semicolons (C arrays and strings)
+  std::string s;
+  {
+    const std::string raw = text ? text : "";
+    for (size_t k = 0; k < raw.size(); ++k) {
+      const char c = raw[k];
+      if (c == '"' || c == '\'' || c == '{' || c == '}' || c == ';')
+        continue;
+      const bool bytes_prefix = c == 'b' && k + 1 < raw.size() && (raw[k + 1] == '"' || raw[k + 1] == '\'') &&
+                                (k == 0 || !std::isalnum((unsigned char)raw[k - 1]));
+      if (bytes_prefix)
+        continue;
+      s += c;
+    }
+  }
   const bool code_style = s.find("\\x") != std::string::npos;
 
   if (code_style) {
@@ -200,6 +215,18 @@ bool parse(const char* text, pattern_t& out, std::string& error) {
 
       if (tok.size() > 2 && tok[0] == '0' && (tok[1] == 'x' || tok[1] == 'X'))
         tok.erase(0, 2);
+
+      // Run of hex digits without separators: "48895C24"
+      if (tok.size() > 2 && tok.size() % 2 == 0) {
+        bool all_hex = true;
+        for (char c : tok)
+          all_hex &= hex_value(c) >= 0;
+        if (all_hex) {
+          for (size_t k = 0; k < tok.size(); k += 2)
+            out.add((uint8_t)(hex_value(tok[k]) << 4 | hex_value(tok[k + 1])), true);
+          continue;
+        }
+      }
 
       if (tok.empty() || tok.size() > 2) {
         error = "invalid token '" + tok + "'";
