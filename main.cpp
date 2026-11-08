@@ -344,6 +344,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     }
 
     copy(chosen);
+    msg("\n");
     trim_cache();
     beep(beep_default);
   }
@@ -423,11 +424,12 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
       msg("[Fusion]   signature: %s\n", fusion::format(rows[i].sig.pattern, STYLES[first].style, options).c_str());
       msg("[Fusion]   %s\n", resolve_text(rows[i].site, target).c_str());
       print_cpp_line(rows[i].site, "  ");
+      msg("\n");  // blank line between the entries
     }
     if (rows.size() > MAX_LISTED)
-      msg("[Fusion] ... and %d more\n", (int)(rows.size() - MAX_LISTED));
+      msg("[Fusion] ... and %d more\n\n", (int)(rows.size() - MAX_LISTED));
 
-    msg("[Fusion] %d of %d call site(s) have a unique signature (%.3fs), shortest first\n", (int)rows.size(),
+    msg("[Fusion] %d of %d call site(s) have a unique signature (%.3fs), shortest first\n\n", (int)rows.size(),
         (int)sites.size(), seconds_since(t0));
     msg("[Fusion] The shortest one (XREF 1, %d bytes) finds the CALL SITE, not the function itself:\n",
         (int)rows[0].sig.pattern.size());
@@ -435,6 +437,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     msg("[Fusion] %s\n", resolve_text(rows[0].site, target).c_str());
     print_cpp_line(rows[0].site, "");
     copy(clip);
+    msg("\n");
 
     trim_cache();
     beep(beep_default);
@@ -462,7 +465,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     trim_cache();
 
     if (hits.empty()) {
-      msg("[Fusion] No match for %s\n", fusion::format(pattern, fusion::style_t::ida, options).c_str());
+      msg("[Fusion] No match for %s\n\n", fusion::format(pattern, fusion::style_t::ida, options).c_str());
       return;
     }
 
@@ -477,6 +480,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     } else {
       msg("[Fusion] Not jumping, the pattern is not unique\n");
     }
+    msg("\n");
     beep(beep_default);
   }
 };
