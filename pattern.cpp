@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <atomic>
 #include <cstring>
+#include <thread>
 
 #define XXH_INLINE_ALL
 #include "third_party/xxhash/xxhash.h"
@@ -266,10 +268,11 @@ bool parse(const char* text, pattern_t& out, std::string& error) {
 // image
 // ---------------------------------------------------------------------------
 
-void image_t::add_blob(ea_t start, std::vector<uint8_t> data) {
+void image_t::add_blob(ea_t start, std::vector<uint8_t> data, bool executable) {
   blob_t blob;
-  blob.start = start;
-  blob.data  = std::move(data);
+  blob.start      = start;
+  blob.data       = std::move(data);
+  blob.executable = executable;
   blobs_.push_back(std::move(blob));
 }
 
@@ -297,41 +300,105 @@ static bool match_at(const uint8_t* p, const pattern_t& pat) {
   return true;
 }
 
-std::vector<ea_t> image_t::find(const pattern_t& pat, size_t limit) const {
+// Bytes that show up all over x86 code and padding, most common first. memchr stops at every
+// occurrence of its key, so anchoring on a byte that is not in this list means far fewer stops.
+static int commonness(uint8_t b) {
+  static const uint8_t common[] = {0x00, 0xCC, 0xFF, 0x48, 0x8B, 0x89, 0x24, 0x0F, 0x83, 0x01, 0x04, 0x08, 0x10,
+                                   0xE8, 0x45, 0x4C, 0x20, 0x40, 0x41, 0xC0, 0x05, 0x90, 0x5C, 0x8D, 0xC7};
+  for (size_t i = 0; i < sizeof(common); ++i)
+    if (common[i] == b)
+      return (int)(sizeof(common) - i);  // larger = more common
+  return 0;
+}
+
+// Matches that start in [begin, end) of one blob, ascending.
+static void scan_range(const image_t::blob_t& b, const pattern_t& pat, size_t anchor, size_t begin, size_t end,
+                       size_t limit, std::vector<ea_t>& out) {
+  if (begin >= end)
+    return;
+
+  const uint8_t  key  = pat.bytes[anchor];
+  const uint8_t* base = b.data.data();
+  const uint8_t* p    = base + begin + anchor;
+  const uint8_t* stop = base + end + anchor;  // one past the last anchor position
+
+  while (p < stop) {
+    p = (const uint8_t*)memchr(p, key, (size_t)(stop - p));
+    if (!p)
+      break;
+
+    const uint8_t* start = p - anchor;
+    if (match_at(start, pat)) {
+      out.push_back(b.start + (ea_t)(start - base));
+      if (out.size() >= limit)
+        return;
+    }
+    ++p;
+  }
+}
+
+std::vector<ea_t> image_t::find(const pattern_t& pat, size_t limit, bool code_only) const {
   std::vector<ea_t> hits;
 
-  // Anchor on the first fixed byte so memchr can do the heavy lifting
-  size_t anchor = 0;
-  while (anchor < pat.size() && !pat.fixed[anchor])
-    ++anchor;
+  // Anchor on the least common fixed byte
+  size_t anchor = pat.size();
+  int    best   = INT32_MAX;
+  for (size_t i = 0; i < pat.size(); ++i) {
+    if (!pat.fixed[i])
+      continue;
+    int c = commonness(pat.bytes[i]);
+    if (c < best) {
+      best   = c;
+      anchor = i;
+    }
+  }
   if (anchor >= pat.size())
     return hits;
 
-  const uint8_t key = pat.bytes[anchor];
+  struct task_t { const blob_t* blob; size_t begin, end; };
+  std::vector<task_t> tasks;
+  size_t              scanned = 0;
+  constexpr size_t    task_size = 4u << 20;
 
   for (const blob_t& b : blobs_) {
-    if (b.data.size() < pat.size())
+    if ((code_only && !b.executable) || b.data.size() < pat.size())
       continue;
-
-    const uint8_t* base = b.data.data();
-    const uint8_t* last = base + (b.data.size() - pat.size());  // last valid start
-    const uint8_t* p    = base + anchor;
-
-    while (p <= last + anchor) {
-      p = (const uint8_t*)memchr(p, key, (size_t)(last + anchor - p) + 1);
-      if (!p)
-        break;
-
-      const uint8_t* start = p - anchor;
-      if (match_at(start, pat)) {
-        hits.push_back(b.start + (ea_t)(start - base));
-        if (hits.size() >= limit)
-          return hits;
-      }
-      ++p;
-    }
+    const size_t starts = b.data.size() - pat.size() + 1;  // possible match positions
+    for (size_t off = 0; off < starts; off += task_size)
+      tasks.push_back({&b, off, std::min(off + task_size, starts)});
+    scanned += starts;
   }
 
+  unsigned workers = std::thread::hardware_concurrency();
+  workers          = std::min<unsigned>(workers ? workers : 1, 16);
+
+  // Small images and limited searches are not worth threads (and a limit wants the first hits)
+  if (limit != SIZE_MAX || scanned < (8u << 20) || workers < 2) {
+    for (const task_t& t : tasks) {
+      scan_range(*t.blob, pat, anchor, t.begin, t.end, limit, hits);
+      if (hits.size() >= limit)
+        break;
+    }
+    return hits;
+  }
+
+  std::vector<std::vector<ea_t>> parts(tasks.size());
+  std::atomic<size_t>            next{0};
+  auto worker = [&] {
+    for (size_t i; (i = next.fetch_add(1)) < tasks.size();)
+      scan_range(*tasks[i].blob, pat, anchor, tasks[i].begin, tasks[i].end, SIZE_MAX, parts[i]);
+  };
+
+  std::vector<std::thread> pool;
+  for (unsigned i = 1; i < workers; ++i)
+    pool.emplace_back(worker);
+  worker();
+  for (std::thread& t : pool)
+    t.join();
+
+  for (std::vector<ea_t>& part : parts)
+    hits.insert(hits.end(), part.begin(), part.end());
+  std::sort(hits.begin(), hits.end());
   return hits;
 }
 

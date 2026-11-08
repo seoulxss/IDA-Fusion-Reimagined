@@ -28,6 +28,7 @@ const char* style_name(style_t s);
 struct options_t {
   bool wildcard_displ = true;   // wildcard 32 bit displacements ([reg+disp32])
   bool wildcard_imm   = false;  // wildcard every 32/64 bit immediate (offset operands are always wildcarded)
+  bool code_only      = false;  // only look at executable segments (faster, but data is not searched)
   size_t max_bytes    = 512;    // give up after this many bytes
 };
 
@@ -49,22 +50,28 @@ std::string format(const pattern_t& pat, style_t style);
 // Without a mask, a CODE style \x00 is treated as a wildcard.
 bool parse(const char* text, pattern_t& out, std::string& error);
 
-// Snapshot of all loaded segments.
+// Snapshot of the loaded segments. Segments are read lazily and kept, so a second search
+// does not read the database again; the owner calls clear() when the database changes.
 class image_t {
 public:
   struct blob_t {
     ea_t start = 0;
     std::vector<uint8_t> data;
+    bool executable = true;
   };
 
-  // Returns false when cancelled by the user.
-  bool capture();
+  // Reads the segments that are not in the snapshot yet (only executable ones with `code_only`).
+  // Returns false when cancelled by the user; segments read so far are kept.
+  bool capture(bool code_only = false);
 
   // Adds bytes by hand (used by capture() and by the tests).
-  void add_blob(ea_t start, std::vector<uint8_t> data);
+  void add_blob(ea_t start, std::vector<uint8_t> data, bool executable = true);
 
-  // Every address the pattern matches at. Stops after `limit` hits.
-  std::vector<ea_t> find(const pattern_t& pat, size_t limit = SIZE_MAX) const;
+  void clear() { blobs_.clear(); }
+
+  // Every address the pattern matches at, in ascending order. Stops after `limit` hits.
+  // Large snapshots are scanned by several threads (not with a limit).
+  std::vector<ea_t> find(const pattern_t& pat, size_t limit = SIZE_MAX, bool code_only = false) const;
 
   // Pointer to `len` bytes at `ea`, or nullptr if the range is not inside one segment.
   const uint8_t* at(ea_t ea, size_t len) const;

@@ -36,7 +36,8 @@ inline constexpr const char DIALOG_FORM[] =
     "<Hash of signature - XXH64:C>\n"
     "<Hash of signature - XXH128:C>>\n\n"
     "<Wildcard 32 bit displacements:C>\n"
-    "<Wildcard 32/64 bit immediates:C>>\n\n";
+    "<Wildcard 32/64 bit immediates:C>\n"
+    "<Only scan executable segments (faster):C>>\n\n";
 // clang-format on
 
 }  // namespace fusion

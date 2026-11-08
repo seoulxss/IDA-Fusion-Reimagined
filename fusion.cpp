@@ -23,9 +23,7 @@ namespace fusion {
 // image
 // ---------------------------------------------------------------------------
 
-bool image_t::capture() {
-  blobs_.clear();
-
+bool image_t::capture(bool code_only) {
   constexpr size_t chunk = 1u << 20;
 
   const int qty = get_segm_qty();
@@ -40,7 +38,19 @@ bool image_t::capture() {
     if (seg.end_ea <= seg.start_ea)
       continue;
 
-    std::vector<uint8_t> data((size_t)(seg.end_ea - seg.start_ea), 0);
+    const bool executable = (seg.get_perm() & SEGPERM_EXEC) != 0 || type == SEG_CODE;
+    if (code_only && !executable)
+      continue;
+
+    // Already in the snapshot?
+    const size_t size = (size_t)(seg.end_ea - seg.start_ea);
+    bool         have = false;
+    for (const blob_t& b : blobs_)
+      have |= b.start == seg.start_ea && b.data.size() == size;
+    if (have)
+      continue;
+
+    std::vector<uint8_t> data(size, 0);
 
     for (size_t off = 0; off < data.size(); off += chunk) {
       if (user_cancelled())
@@ -50,7 +60,7 @@ bool image_t::capture() {
       get_bytes(data.data() + off, (ssize_t)len, seg.start_ea + off, GMB_READALL);
     }
 
-    add_blob(seg.start_ea, std::move(data));
+    add_blob(seg.start_ea, std::move(data), executable);
   }
 
   return true;
@@ -153,7 +163,7 @@ bool generate(const image_t& image, ea_t start, const options_t& opt, generated_
     if (!seeded) {
       // One full scan for the first instruction. Its opcode byte is never wildcarded,
       // so the pattern starts on a fixed byte and hit addresses are instruction starts.
-      for (ea_t hit : image.find(out.pattern))
+      for (ea_t hit : image.find(out.pattern, SIZE_MAX, opt.code_only))
         if (hit != start)
           candidates.push_back(hit);
 
@@ -229,7 +239,7 @@ bool generate_range(const image_t& image, ea_t start, ea_t end, const options_t&
   if (out.pattern.empty())
     return false;
 
-  std::vector<ea_t> hits = image.find(out.pattern);
+  std::vector<ea_t> hits = image.find(out.pattern, SIZE_MAX, opt.code_only);
   size_t others = 0;
   for (ea_t h : hits)
     if (h != start)

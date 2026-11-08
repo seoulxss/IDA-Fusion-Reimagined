@@ -97,7 +97,7 @@ int main() {
       ++items;
       i = end + 1;
     }
-    CHECK(items == 11 && radios == 2 && checks == 9);
+    CHECK(items == 12 && radios == 2 && checks == 10);
     CHECK(fusion::DIALOG_OUTPUT_COUNT == 7);
     // the layout that crashed IDA 9.5: a form-change callback together with a third button
     CHECK(form.find("%/") == std::string::npos);
@@ -107,6 +107,50 @@ int main() {
     for (size_t i = 0; (i = form.find(">>", i)) != std::string::npos; i += 2)
       ++closers;
     CHECK(closers == 3);
+  }
+
+  // Large image: scanned by several threads. Plant matches right at the 4 MB task borders.
+  {
+    const size_t   mb = 1u << 20;
+    std::vector<uint8_t> big(24 * mb, 0xCC);
+    // none of them overlap; two straddle a task border, one starts exactly on one
+    std::vector<size_t> planted = {0, 4 * mb - 3, 4 * mb + 2, 8 * mb - 2, 12 * mb, 16 * mb + 7, 24 * mb - 5};
+    for (size_t at : planted) {
+      const uint8_t sig[5] = {0x48, 0x8B, 0xAA, 0xBB, 0x05};
+      for (int k = 0; k < 5; ++k) big[at + k] = sig[k];
+    }
+    image_t large;
+    large.add_blob(0x140000000, big);
+    parse("48 8B ? ? 05", p, err);
+
+    auto par = large.find(p);                       // threaded
+    CHECK(par.size() == planted.size());
+    for (size_t k = 0; k < par.size() && k < planted.size(); ++k)
+      CHECK(par[k] == 0x140000000 + planted[k]);    // ascending, nothing doubled at the borders
+
+    auto lim = large.find(p, 3);                    // sequential, with limit
+    CHECK(lim.size() == 3 && lim[2] == 0x140000000 + planted[2]);
+
+    // anchor on a rare byte, wildcards in front: "? ? AA BB 05" starts 2 before the signature
+    parse("? ? ? AA BB 05", p, err);
+    auto lead = large.find(p);
+    size_t expect = 0;
+    for (size_t at : planted) expect += at >= 3;    // the one at 0 has no room for 3 leading bytes
+    CHECK(lead.size() == expect);
+  }
+
+  // code_only skips data segments
+  {
+    image_t two;
+    std::vector<uint8_t> code(64, 0x90), data(64, 0x90);
+    code[10] = 0x11; code[11] = 0x22; code[12] = 0x33;
+    data[20] = 0x11; data[21] = 0x22; data[22] = 0x33;
+    two.add_blob(0x1000, code, true);
+    two.add_blob(0x2000, data, false);
+    parse("11 22 33", p, err);
+    CHECK(two.find(p).size() == 2);
+    auto only = two.find(p, SIZE_MAX, true);
+    CHECK(only.size() == 1 && only[0] == 0x100A);
   }
 
   printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);

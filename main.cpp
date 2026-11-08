@@ -63,6 +63,43 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
 
   std::vector<std::unique_ptr<action_t>> handlers;  // one per STYLES entry, then search
 
+  // The snapshot of the database is kept between runs, so the second search does not read it again.
+  // Anything that changes bytes or segments throws it away.
+  fusion::image_t image_cache;
+  static constexpr size_t CACHE_LIMIT = size_t(512) << 20;  // do not keep more than this in memory
+
+  struct idb_watch_t : public event_listener_t {
+    plugin_ctx_t* owner;
+    explicit idb_watch_t(plugin_ctx_t* o) : owner(o) {}
+    ssize_t idaapi on_event(ssize_t code, va_list) override {
+      switch (code) {
+        case idb_event::byte_patched:
+        case idb_event::segm_added:
+        case idb_event::segm_deleted:
+        case idb_event::segm_start_changed:
+        case idb_event::segm_end_changed:
+        case idb_event::segm_moved:
+        case idb_event::allsegs_moved:
+          owner->image_cache.clear();
+          break;
+      }
+      return 0;
+    }
+  } idb_watch{this};
+
+  bool load_image() {
+    wait_box_t wait("[Fusion] Reading database...");
+    if (image_cache.capture(options.code_only))
+      return true;
+    msg("[Fusion] Cancelled\n");
+    return false;
+  }
+
+  void trim_cache() {
+    if (image_cache.total_bytes() > CACHE_LIMIT)
+      image_cache.clear();
+  }
+
   plugin_ctx_t() {
     for (const style_entry_t& e : STYLES) {
       handlers.push_back(std::make_unique<action_t>([this, s = e.style] { create(s); }));
@@ -72,9 +109,11 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     register_action(ACTION_DESC_LITERAL_PLUGMOD(ACTION_SEARCH, "Search for signature...", handlers.back().get(), this, "Ctrl-Alt-F", nullptr, -1));
 
     hook_event_listener(HT_UI, this);
+    hook_event_listener(HT_IDB, &idb_watch);
   }
 
   ~plugin_ctx_t() override {
+    unhook_event_listener(HT_IDB, &idb_watch);
     unhook_event_listener(HT_UI, this);
     for (const style_entry_t& e : STYLES)
       unregister_action(e.action);
@@ -99,7 +138,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
   bool idaapi run(size_t) override {
     ushort action  = last_action;
     ushort outputs = last_outputs;
-    ushort toggles = (options.wildcard_displ ? 1 : 0) | (options.wildcard_imm ? 2 : 0);
+    ushort toggles = (options.wildcard_displ ? 1 : 0) | (options.wildcard_imm ? 2 : 0) | (options.code_only ? 4 : 0);
 
     // 0 = cancelled (or IDA refused the format string, which it reports with a warning)
     if (ask_form(fusion::DIALOG_FORM, &action, &outputs, &toggles) <= 0)
@@ -109,6 +148,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     last_outputs           = outputs;
     options.wildcard_displ = (toggles & 1) != 0;
     options.wildcard_imm   = (toggles & 2) != 0;
+    options.code_only      = (toggles & 4) != 0;
 
     if (action == 1)
       search();
@@ -143,14 +183,9 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
       return;
     }
 
-    fusion::image_t image;
-    {
-      wait_box_t wait("[Fusion] Reading database...");
-      if (!image.capture()) {
-        msg("[Fusion] Cancelled\n");
-        return;
-      }
-    }
+    if (!load_image())
+      return;
+    const fusion::image_t& image = image_cache;
 
     fusion::generated_t result;
     bool ok;
@@ -203,6 +238,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     else
       msg("[Fusion] Could not access the clipboard\n");
 
+    trim_cache();
     beep(beep_default);
   }
 
@@ -217,16 +253,15 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
       return;
     }
 
-    fusion::image_t image;
+    if (!load_image())
+      return;
+
     std::vector<ea_t> hits;
     {
       wait_box_t wait("[Fusion] Searching...");
-      if (!image.capture()) {
-        msg("[Fusion] Cancelled\n");
-        return;
-      }
-      hits = image.find(pattern);
+      hits = image_cache.find(pattern, SIZE_MAX, options.code_only);
     }
+    trim_cache();
 
     if (hits.empty()) {
       msg("[Fusion] No match for %s\n", fusion::format(pattern, fusion::style_t::ida).c_str());

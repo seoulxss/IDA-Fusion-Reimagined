@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 
 #include <pro.h>
 #include <ida.hpp>
@@ -40,11 +41,15 @@ int main(int argc, char** argv) {
   }
   enable_console_messages(false);
 
-  if (open_database(argv[1], true) != 0) {
+  // "capture" as 3rd argument: only time reading the database, skip auto-analysis
+  const bool capture_only = argc > 3 && std::string(argv[3]) == "capture";
+
+  if (open_database(argv[1], !capture_only) != 0) {
     printf("open_database failed\n");
     return 2;
   }
-  auto_wait();
+  if (!capture_only)
+    auto_wait();
 
   using clock = std::chrono::steady_clock;
   auto t0 = clock::now();
@@ -57,6 +62,19 @@ int main(int argc, char** argv) {
   auto t1 = clock::now();
   printf("snapshot: %zu bytes in %lld ms\n", image.total_bytes(),
          (long long)std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count());
+
+  if (capture_only) {
+    for (int round = 0; round < 3; ++round) {
+      fusion::image_t again;
+      auto a = clock::now();
+      again.capture();
+      auto b = clock::now();
+      printf("capture round %d: %zu MB in %lld ms\n", round, again.total_bytes() >> 20,
+             (long long)std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count());
+    }
+    close_database(false);
+    return 0;
+  }
 
   fusion::options_t opt;
   size_t total = 0, unique = 0, not_unique = 0, mismatches = 0, failed = 0, sum_len = 0;

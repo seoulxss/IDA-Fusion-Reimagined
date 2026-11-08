@@ -38,9 +38,15 @@ Wildcards: relative calls/jumps (rel32), RIP-relative and absolute addresses, of
 
 ## How it works
 
-All loaded segments are read into memory once per run. A search is then a plain memory scan, and generation scans
-once for the first instruction and afterwards only re-checks the remaining candidates for each newly added
-instruction, so it does not call IDA's binary search per instruction.
+The loaded segments are read into memory once and **kept**, so the second search or signature does not read the
+database again. Anything that changes bytes or segments (patching, rebasing, new/removed segments) throws the copy
+away; a database above 512 MB is not kept. A search is then a plain memory scan: it anchors on the least common
+byte of the pattern, and large images are scanned by several threads. Generation scans once for the first
+instruction and afterwards only re-checks the remaining candidates for each newly added instruction.
+
+Reading the database through IDA (`get_bytes`) is the slow part (roughly 50 MB/s here, and it cannot be
+parallelised), so the dialog has **Only scan executable segments (faster)**: data segments are neither read nor
+searched. Use it when you only look for code.
 
 ## Build
 
@@ -62,6 +68,7 @@ The plugin has to be built with MSVC; MinGW builds are not ABI compatible with I
 ## Tests
 
 - `tests/test_fusion.cpp`: parser, formatter and scanner, no IDA needed (compile with `pattern.cpp`).
+- `tests/bench.cpp`: scan speed on a large real binary (no IDA needed): 333 MB in 5 to 26 ms per pattern.
 - `tests/headless.cpp`: opens a real binary with idalib, generates a signature for every function and checks with an
   independent scan that each "unique" signature matches exactly its function.
 
