@@ -1,0 +1,126 @@
+// Headless check of the signature engine against a real database (idalib).
+//   fusion_headless <binary> [max_functions]
+//
+// For every function start: generate a signature, then verify with an independent scan
+// of the snapshot that a "unique" signature matches exactly the function start.
+
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+
+#include <pro.h>
+#include <ida.hpp>
+#include <auto.hpp>
+#include <funcs.hpp>
+#include <idalib.hpp>
+#include <loader.hpp>
+
+#include "../fusion.h"
+
+// Wildcard positions carry the original byte in the generator, so compare fixed bytes only
+static bool same_pattern(const fusion::pattern_t& a, const fusion::pattern_t& b) {
+  if (a.size() != b.size() || a.fixed != b.fixed)
+    return false;
+  for (size_t i = 0; i < a.size(); ++i)
+    if (a.fixed[i] && a.bytes[i] != b.bytes[i])
+      return false;
+  return true;
+}
+
+int main(int argc, char** argv) {
+  if (argc < 2) {
+    printf("usage: %s <binary> [max_functions]\n", argv[0]);
+    return 2;
+  }
+  const size_t max_funcs = argc > 2 ? (size_t)atoi(argv[2]) : 500;
+
+  if (init_library() != 0) {
+    printf("init_library failed\n");
+    return 2;
+  }
+  enable_console_messages(false);
+
+  if (open_database(argv[1], true) != 0) {
+    printf("open_database failed\n");
+    return 2;
+  }
+  auto_wait();
+
+  using clock = std::chrono::steady_clock;
+  auto t0 = clock::now();
+
+  fusion::image_t image;
+  if (!image.capture()) {
+    printf("capture failed\n");
+    return 1;
+  }
+  auto t1 = clock::now();
+  printf("snapshot: %zu bytes in %lld ms\n", image.total_bytes(),
+         (long long)std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count());
+
+  fusion::options_t opt;
+  size_t total = 0, unique = 0, not_unique = 0, mismatches = 0, failed = 0, sum_len = 0;
+  size_t longest = 0;
+
+  const size_t qty = get_func_qty();
+  for (size_t i = 0; i < qty && total < max_funcs; ++i) {
+    func_t* f = getn_func(i);
+    if (!f)
+      continue;
+    const ea_t start = f->start_ea;
+
+    fusion::generated_t g;
+    ++total;
+    if (!fusion::generate(image, start, opt, g)) {
+      ++failed;
+      continue;
+    }
+
+    if (g.unique) {
+      ++unique;
+      sum_len += g.pattern.size();
+      longest = std::max(longest, g.pattern.size());
+
+      // Independent verification
+      std::vector<ea_t> hits = image.find(g.pattern);
+      if (hits.size() != 1 || hits[0] != start) {
+        ++mismatches;
+        printf("MISMATCH at 0x%llX: %zu hits, sig %s\n", (unsigned long long)start, hits.size(),
+               fusion::format(g.pattern, fusion::style_t::ida).c_str());
+      }
+
+      // The textual form must round-trip through the parser
+      fusion::pattern_t reparsed;
+      std::string err;
+      if (!fusion::parse(fusion::format(g.pattern, fusion::style_t::ida).c_str(), reparsed, err) ||
+          !same_pattern(reparsed, g.pattern)) {
+        ++mismatches;
+        printf("ROUNDTRIP failure at 0x%llX\n", (unsigned long long)start);
+      }
+    } else {
+      ++not_unique;
+      if (not_unique <= 8)
+        printf("not unique 0x%llX: %zu other, %zu bytes, %zu insns, note: %s | %s\n", (unsigned long long)start,
+               g.other_matches, g.pattern.size(), g.insn_count, g.note.c_str(),
+               fusion::format(g.pattern, fusion::style_t::ida).c_str());
+    }
+  }
+  auto t2 = clock::now();
+
+  printf("functions: %zu  unique: %zu  not unique: %zu  failed: %zu  mismatches: %zu\n", total, unique, not_unique, failed, mismatches);
+  if (unique)
+    printf("avg signature length: %.1f bytes, longest %zu\n", (double)sum_len / unique, longest);
+  printf("generation: %lld ms\n", (long long)std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
+
+  // Sample output
+  if (qty) {
+    func_t* f = getn_func(qty / 2);
+    fusion::generated_t g;
+    if (f && fusion::generate(image, f->start_ea, opt, g))
+      printf("sample 0x%llX: %s (%s)\n", (unsigned long long)f->start_ea,
+             fusion::format(g.pattern, fusion::style_t::ida).c_str(), g.unique ? "unique" : "not unique");
+  }
+
+  close_database(false);
+  return mismatches || failed ? 1 : 0;
+}

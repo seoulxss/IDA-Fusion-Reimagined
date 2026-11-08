@@ -45,8 +45,19 @@ The plugin has to be built with MSVC; MinGW builds are not ABI compatible with I
 
 ## Tests
 
-`tests/test_fusion.cpp` covers the parser, formatter and scanner (no IDA needed): compile it together with
-`pattern.cpp` and the SDK include path.
+- `tests/test_fusion.cpp`: parser, formatter and scanner, no IDA needed (compile with `pattern.cpp`).
+- `tests/headless.cpp`: opens a real binary with idalib, generates a signature for every function and checks with an
+  independent scan that each "unique" signature matches exactly its function.
+
+```bat
+cmake -B build -G Ninja -DFUSION_BUILD_TESTS=ON
+cmake --build build
+set IDADIR=C:\Program Files\IDA Professional 9.5
+set PATH=%IDADIR%;%PATH%
+build\..usion_headless.exe C:\path	oinary.exe 1000
+```
+
+(`fusion_headless.exe` is written to `%IDABIN%`, by default `%IDASDK%\srcin`.)
 
 ## License
 
