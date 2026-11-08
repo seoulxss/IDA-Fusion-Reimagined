@@ -97,17 +97,16 @@ int main() {
       ++items;
       i = end + 1;
     }
-    CHECK(items == 9 && radios == 0 && checks == 9);
-    CHECK(form.find("%/") != std::string::npos);                                  // form-change callback
+    CHECK(items == 11 && radios == 2 && checks == 9);
     CHECK(fusion::DIALOG_OUTPUT_COUNT == 7);
-    size_t button_no = form.find("BUTTON NO ");
-    CHECK(button_no != std::string::npos);
-    CHECK(form.substr(button_no, form.find('\n', button_no) - button_no).find(':') == std::string::npos);
+    // the layout that crashed IDA 9.5: a form-change callback together with a third button
+    CHECK(form.find("%/") == std::string::npos);
+    CHECK(form.find("BUTTON NO") == std::string::npos);
     // one closed group per type: the last item of each group is followed by a second '>'
     size_t closers = 0;
     for (size_t i = 0; (i = form.find(">>", i)) != std::string::npos; i += 2)
       ++closers;
-    CHECK(closers == 2);
+    CHECK(closers == 3);
   }
 
   printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);

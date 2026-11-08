@@ -57,6 +57,7 @@ struct action_t : action_handler_t {
 
 struct plugin_ctx_t : public plugmod_t, public event_listener_t {
   fusion::options_t options;
+  ushort            last_action  = 0;  // 0 = create, 1 = search
   ushort            last_outputs = 3;  // IDA + CODE ticked on first use
   qstring           last_search;
 
@@ -68,7 +69,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
       register_action(ACTION_DESC_LITERAL_PLUGMOD(e.action, e.label, handlers.back().get(), this, nullptr, nullptr, -1));
     }
     handlers.push_back(std::make_unique<action_t>([this] { search(); }));
-    register_action(ACTION_DESC_LITERAL_PLUGMOD(ACTION_SEARCH, "Search for signature...", handlers.back().get(), this, nullptr, nullptr, -1));
+    register_action(ACTION_DESC_LITERAL_PLUGMOD(ACTION_SEARCH, "Search for signature...", handlers.back().get(), this, "Ctrl-Alt-F", nullptr, -1));
 
     hook_event_listener(HT_UI, this);
   }
@@ -96,37 +97,24 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
   }
 
   bool idaapi run(size_t) override {
+    ushort action  = last_action;
     ushort outputs = last_outputs;
     ushort toggles = (options.wildcard_displ ? 1 : 0) | (options.wildcard_imm ? 2 : 0);
 
-    g_form_opened = false;
-    const int answer = ask_form(fusion::DIALOG_FORM, &form_callback, &outputs, &toggles);
-
-    if (answer == 0 && !g_form_opened) {
-      // The callback never fired: IDA refused the format string (it also printed a warning)
-      msg("[Fusion] The settings dialog could not be opened. Use the Fusion entries of the context menu instead.\n");
+    // 0 = cancelled (or IDA refused the format string, which it reports with a warning)
+    if (ask_form(fusion::DIALOG_FORM, &action, &outputs, &toggles) <= 0)
       return true;
-    }
-    if (answer < 0)
-      return true;  // cancelled
 
-    // Run (1) and Search (0) both keep the choices
+    last_action            = action;
     last_outputs           = outputs;
     options.wildcard_displ = (toggles & 1) != 0;
     options.wildcard_imm   = (toggles & 2) != 0;
 
-    if (answer == 0)
+    if (action == 1)
       search();
     else
       create(outputs);
     return true;
-  }
-
-  static bool g_form_opened;
-  static int idaapi form_callback(int field_id, form_actions_t&) {
-    if (field_id == CB_INIT)
-      g_form_opened = true;
-    return 1;
   }
 
   void create(style_t style) { create(ushort(1u << style_index(style))); }
@@ -253,8 +241,6 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     beep(beep_default);
   }
 };
-
-bool plugin_ctx_t::g_form_opened = false;
 
 plugmod_t* idaapi plugin_init() {
   // The signature code is x86/x64 specific only in how operands get wildcarded;

@@ -11,8 +11,8 @@ entries in the **Fusion** submenu.
 
 The dialog has a checkbox per output: **Signature (IDA style)**, **Signature (CODE style)** and the hashes
 **FNV-1a (32 bit)**, **CRC-32**, **XXH32**, **XXH64**, **XXH128**. Only what is ticked is printed and copied (one
-output as is, several one per line with their name). The choice is remembered. **Run** creates, **Search pattern...**
-searches (see below). The entries of the context menu create a single output each.
+output as is, several one per line with their name). The choice is remembered. Choose **Create** or **Search for a pattern** at the top
+and press **Run**. The entries of the context menu create a single output each.
 
 | Output | Example |
 |---|---|
@@ -22,7 +22,7 @@ searches (see below). The entries of the context menu create a single output eac
 
 ### Search pattern
 
-The button in the dialog (or *Fusion > Search for signature...* in the context menu) asks for a pattern, scans the
+The option in the dialog, **Ctrl-Alt-F**, or *Fusion > Search for signature...* in the context menu asks for a pattern, scans the
 whole database, lists every match in the output window and jumps to the first one. Accepted notations:
 
 - IDA style: `48 8B ? ? 05` or `48 8B ?? ?? 05`

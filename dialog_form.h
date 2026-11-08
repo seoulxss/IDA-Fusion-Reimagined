@@ -8,15 +8,14 @@
 //   - a '#' inside a label  ('#' delimits hints)
 // So labels use plain words, digits, '-', '/' and parentheses only; examples live in the README.
 //
-// "%/" declares the form-change callback: it fires with CB_INIT only if the form parsed, which
-// is the only way to tell a refused string from the Search button (both return 0).
-//
-// "BUTTON NO" adds a third button. Return values: 1 = Run, 0 = Search pattern, -1 = cancelled.
+// Deliberately plain: only radio and checkbox groups, no "%/" callback and no "BUTTON NO".
+// IDA 9.5 crashed (jump through a dangling stack object, after the dialog closed) with a
+// form-change callback together with a third button; the previous radio + checkbox layout was fine.
 //
 // Arguments, in order:
-//   formchgcb_t* callback, ushort* outputs (checkbox group 1), ushort* options (checkbox group 2)
-//
-// Group 1 has one checkbox per entry of STYLES in main.cpp, in the same order.
+//   ushort* action   (radio group: 0 = create, 1 = search)
+//   ushort* outputs  (checkbox group, one checkbox per entry of STYLES in main.cpp, same order)
+//   ushort* options  (checkbox group)
 
 namespace fusion {
 
@@ -26,8 +25,9 @@ inline constexpr int DIALOG_OUTPUT_COUNT = 7;
 inline constexpr const char DIALOG_FORM[] =
     "STARTITEM 0\n"
     "BUTTON YES* Run\n"
-    "BUTTON NO Search pattern...\n"
-    "%/Fusion\n\n"
+    "Fusion\n\n"
+    "<Create (the ticked outputs below):R>\n"
+    "<Search for a pattern in the database:R>>\n\n"
     "<Signature (IDA style):C>\n"
     "<Signature (CODE style):C>\n"
     "<Hash of signature - FNV-1a (32 bit):C>\n"
