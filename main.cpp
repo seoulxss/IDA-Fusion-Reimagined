@@ -277,6 +277,14 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     return buf;
   }
 
+  // The same step as C++ you can paste next to your scanner (`match` is the address the scan returned)
+  static void print_cpp_line(ea_t site, const char* indent) {
+    size_t rel = 0, len = 0;
+    if (!fusion::describe_branch(site, rel, len))
+      return;
+    msg("[Fusion] %sC++: %s\n", indent, fusion::cpp_resolve_line(rel, len).c_str());
+  }
+
   static void copy(const std::string& text) {
     if (fusion::copy_to_clipboard(text))
       msg("[Fusion] Copied to clipboard\n");
@@ -414,6 +422,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
           name.empty() ? "?" : name.c_str());
       msg("[Fusion]   signature: %s\n", fusion::format(rows[i].sig.pattern, STYLES[first].style, options).c_str());
       msg("[Fusion]   %s\n", resolve_text(rows[i].site, target).c_str());
+      print_cpp_line(rows[i].site, "  ");
     }
     if (rows.size() > MAX_LISTED)
       msg("[Fusion] ... and %d more\n", (int)(rows.size() - MAX_LISTED));
@@ -424,6 +433,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
         (int)rows[0].sig.pattern.size());
     const std::string clip = print_outputs(rows[0].sig, outputs);
     msg("[Fusion] %s\n", resolve_text(rows[0].site, target).c_str());
+    print_cpp_line(rows[0].site, "");
     copy(clip);
 
     trim_cache();

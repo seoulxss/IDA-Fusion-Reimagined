@@ -84,6 +84,13 @@ int main() {
     CHECK(back.fixed == z.fixed);                                       // the real 00 survived the round trip
   }
 
+  // the paste-ready C++ line of the XREF output
+  CHECK(cpp_resolve_line(1, 5) ==
+        "const std::uintptr_t target = match + 5 + static_cast<std::uintptr_t>(*reinterpret_cast<const std::int32_t*>(match + 1));");
+  CHECK(cpp_resolve_line(2, 6).find("match + 6 + ") != std::string::npos &&
+        cpp_resolve_line(2, 6).find("(match + 2)") != std::string::npos);
+  CHECK(cpp_resolve_line(1, 5).find("(std::") == std::string::npos);     // no C style cast like (std::int32_t)
+
   // hashes: published check values for "123456789"
   parse("31 32 33 34 35 36 37 38 39", p, err);
   CHECK(format(p, style_t::fnv1a) == "0xBB86B11C");

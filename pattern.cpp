@@ -100,6 +100,13 @@ std::string format(const pattern_t& pat, style_t style) {
   return format(pat, style, options_t());
 }
 
+std::string cpp_resolve_line(size_t rel_offset, size_t insn_size) {
+  // A negative displacement converts to a huge unsigned value; adding it wraps around to the right address.
+  return "const std::uintptr_t target = match + " + std::to_string(insn_size) +
+         " + static_cast<std::uintptr_t>(*reinterpret_cast<const std::int32_t*>(match + " +
+         std::to_string(rel_offset) + "));";
+}
+
 std::string format(const pattern_t& pat, style_t style, const options_t& opt) {
   if (is_hash(style))
     return format_hash(pat, style);

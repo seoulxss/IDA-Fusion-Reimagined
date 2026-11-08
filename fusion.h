@@ -112,6 +112,11 @@ std::vector<ea_t> code_xrefs_to(ea_t target, size_t* data_refs = nullptr);
 // instruction. False if it is not a direct call/jump with an encoded displacement.
 bool describe_branch(ea_t site, size_t& rel_offset, size_t& insn_size);
 
+// One line of C++ that turns the address of a match (a std::uintptr_t named `match`) into the target of the
+// call/jump: the displacement at `match + rel_offset` is relative to the end of the instruction.
+// No C style casts; the address stays an integer, only the 32 bit read goes through a pointer.
+std::string cpp_resolve_line(size_t rel_offset, size_t insn_size);
+
 bool copy_to_clipboard(const std::string& text);
 
 }  // namespace fusion

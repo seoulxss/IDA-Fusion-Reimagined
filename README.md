@@ -98,6 +98,7 @@ it gets a signature that starts at the call instruction and is extended until it
 [Fusion] XREF 1  call site 0x18011AEC8 in LdrpInitializeExecutionOptions
 [Fusion]   signature: E8 ? ? ? ? 85 C0 78 17 44 39 64 24 50
 [Fusion]   resolve: target = match + 5 + int32 at (match + 1)   -> 0x180001008 (checked, this is the function)
+[Fusion]   C++: const std::uintptr_t target = match + 5 + static_cast<std::uintptr_t>(*reinterpret_cast<const std::int32_t*>(match + 1));
 ```
 
 The list is sorted shortest first; the shortest is copied.
@@ -118,12 +119,17 @@ four bytes are `3B 61 EE FF`, which is the signed value `0xFFEE613B = -0x119EC5`
 0x18011AEC8 + 5 + (-0x119EC5) = 0x180001008      <- the function
 ```
 
-In C++, after you found `match` with your own pattern scanner:
+In C++ the plugin prints the step as a line you can paste (`C++:` in the output). `match` is the address your own
+pattern scanner returned, as a `std::uintptr_t`:
 
 ```cpp
-uint8_t* match  = find_pattern(module_base, "E8 ? ? ? ? 85 C0 78 17 44 39 64 24 50");
-uint8_t* target = match + 5 + *(int32_t*)(match + 1);
+const std::uintptr_t match  = find_pattern(module_base, "E8 ? ? ? ? 85 C0 78 17 44 39 64 24 50");
+const std::uintptr_t target = match + 5 + static_cast<std::uintptr_t>(*reinterpret_cast<const std::int32_t*>(match + 1));
 ```
+
+The address stays an integer; only the read of the 32 bit distance goes through a pointer. A negative distance
+becomes a large unsigned number, and adding it wraps around to the right address, so backward calls work too.
+There are no C style casts. The line is checked by compiling it with `/W4 /WX` and running it on a backward and a forward call.
 
 In IDAPython:
 
