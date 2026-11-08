@@ -106,7 +106,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
       register_action(ACTION_DESC_LITERAL_PLUGMOD(e.action, e.label, handlers.back().get(), this, nullptr, nullptr, -1));
     }
     handlers.push_back(std::make_unique<action_t>([this] { search(); }));
-    register_action(ACTION_DESC_LITERAL_PLUGMOD(ACTION_SEARCH, "Search for signature...", handlers.back().get(), this, "Ctrl-Alt-F", nullptr, -1));
+    register_action(ACTION_DESC_LITERAL_PLUGMOD(ACTION_SEARCH, "Search for signature...", handlers.back().get(), this, nullptr, nullptr, -1));
 
     hook_event_listener(HT_UI, this);
     hook_event_listener(HT_IDB, &idb_watch);
