@@ -23,7 +23,7 @@ and press **Run**. The entries of the context menu create a single output each.
 ### Search pattern
 
 The option in the dialog, **Ctrl-Alt-F**, or *Fusion > Search for signature...* in the context menu asks for a pattern, scans the
-whole database, lists every match in the output window and jumps to the first one. Accepted notations:
+whole database, lists every match in the output window and jumps there if there is exactly one match (several matches: no jump). Accepted notations:
 
 - IDA style: `48 8B ? ? 05` or `48 8B ?? ?? 05`
 - CODE style: `\x48\x8B\x00\x00\x05`, optionally with a mask: `\x48\x8B\x00\x00\x05 xx??x`

@@ -237,7 +237,13 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
       msg("[Fusion] %d. 0x%llX\n", (int)(i + 1), (unsigned long long)hits[i]);
     msg("[Fusion] %d match%s\n", (int)hits.size(), hits.size() == 1 ? "" : "es");
 
-    jumpto(hits.front());
+    // Exactly one match: go there. With several there is no right answer, so stay where we are.
+    if (hits.size() == 1) {
+      jumpto(hits.front());
+      msg("[Fusion] Jumped to 0x%llX\n", (unsigned long long)hits.front());
+    } else {
+      msg("[Fusion] Not jumping, the pattern is not unique\n");
+    }
     beep(beep_default);
   }
 };
