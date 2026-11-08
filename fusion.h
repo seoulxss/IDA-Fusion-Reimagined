@@ -18,7 +18,12 @@
 
 namespace fusion {
 
-enum class style_t { ida, code };
+// ida/code are signatures; the rest are hashes over the signature bytes where every
+// wildcard is hashed as 0x00 (so the value stays the same between builds).
+enum class style_t { ida, code, fnv1a, crc32, xxh32, xxh64, xxh128 };
+
+inline bool is_hash(style_t s) { return s != style_t::ida && s != style_t::code; }
+const char* style_name(style_t s);
 
 struct options_t {
   bool wildcard_displ = true;   // wildcard 32 bit displacements ([reg+disp32])

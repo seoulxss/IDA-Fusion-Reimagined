@@ -52,6 +52,23 @@ int main() {
   t.trim();
   CHECK(t.size() == 1 && t.bytes[0] == 1);
 
+  // hashes: published check values for "123456789"
+  parse("31 32 33 34 35 36 37 38 39", p, err);
+  CHECK(format(p, style_t::fnv1a) == "0xBB86B11C");
+  CHECK(format(p, style_t::crc32) == "0xCBF43926");
+  CHECK(format(p, style_t::xxh32) == "0x937BAD67");
+  CHECK(format(p, style_t::xxh64) == "0x8CB841DB40E6AE83");
+  CHECK(format(p, style_t::xxh128).size() == 34 && format(p, style_t::xxh128).rfind("0x", 0) == 0);
+  // wildcards are hashed as 00
+  pattern_t w, z;
+  parse("31 ? 33 ? 35", w, err);
+  parse("31 00 33 00 35", z, err);   // IDA style: 00 here is a real zero byte
+  for (style_t st : {style_t::fnv1a, style_t::crc32, style_t::xxh32, style_t::xxh64, style_t::xxh128})
+    CHECK(format(w, st) == format(z, st));
+  // the real byte behind a wildcard must not leak into the hash
+  pattern_t w2 = w; w2.bytes[1] = 0xAA;
+  CHECK(format(w, style_t::xxh64) == format(w2, style_t::xxh64));
+
   printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
   return failures != 0;
 }

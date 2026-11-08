@@ -4,6 +4,9 @@
 #include <cctype>
 #include <cstring>
 
+#define XXH_INLINE_ALL
+#include "third_party/xxhash/xxhash.h"
+
 // Pattern parsing / formatting and the memory scanner. Nothing in here calls into IDA.
 
 namespace fusion {
@@ -28,7 +31,73 @@ void pattern_t::trim() {
   }
 }
 
+const char* style_name(style_t s) {
+  switch (s) {
+    case style_t::ida:    return "IDA";
+    case style_t::code:   return "CODE";
+    case style_t::fnv1a:  return "FNV-1a";
+    case style_t::crc32:  return "CRC-32";
+    case style_t::xxh32:  return "XXH32";
+    case style_t::xxh64:  return "XXH64";
+    case style_t::xxh128: return "XXH128";
+  }
+  return "?";
+}
+
+static uint32_t fnv1a_32(const uint8_t* p, size_t n) {
+  uint32_t h = 0x811C9DC5u;
+  for (size_t i = 0; i < n; ++i)
+    h = (h ^ p[i]) * 0x01000193u;
+  return h;
+}
+
+static uint32_t crc32_ieee(const uint8_t* p, size_t n) {
+  uint32_t crc = 0xFFFFFFFFu;
+  for (size_t i = 0; i < n; ++i) {
+    crc ^= p[i];
+    for (int k = 0; k < 8; ++k)
+      crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+  }
+  return ~crc;
+}
+
+static void append_hex(std::string& out, uint64_t v, int digits) {
+  static const char hex[] = "0123456789ABCDEF";
+  for (int i = digits - 1; i >= 0; --i)
+    out += hex[(v >> (i * 4)) & 0xF];
+}
+
+static std::string format_hash(const pattern_t& pat, style_t style) {
+  // Wildcards are hashed as 0x00
+  std::vector<uint8_t> data(pat.size());
+  for (size_t i = 0; i < pat.size(); ++i)
+    data[i] = pat.fixed[i] ? pat.bytes[i] : 0;
+
+  const uint8_t* p = data.data();
+  const size_t   n = data.size();
+  std::string    out = "0x";
+
+  switch (style) {
+    case style_t::fnv1a:  append_hex(out, fnv1a_32(p, n), 8); break;
+    case style_t::crc32:  append_hex(out, crc32_ieee(p, n), 8); break;
+    case style_t::xxh32:  append_hex(out, XXH32(p, n, 0), 8); break;
+    case style_t::xxh64:  append_hex(out, XXH64(p, n, 0), 16); break;
+    case style_t::xxh128: {
+      XXH128_hash_t h = XXH3_128bits(p, n);
+      append_hex(out, h.high64, 16);
+      append_hex(out, h.low64, 16);
+      break;
+    }
+    default:
+      return std::string();
+  }
+  return out;
+}
+
 std::string format(const pattern_t& pat, style_t style) {
+  if (is_hash(style))
+    return format_hash(pat, style);
+
   static const char hex[] = "0123456789ABCDEF";
   std::string out;
   out.reserve(pat.size() * 4);

@@ -13,6 +13,7 @@ entries in the **Fusion** submenu.
 |---|---|
 | Create signature (IDA style) | Signature for the instruction under the cursor, e.g. `48 8B ? ? ? 89 5C 24 08`. Extended instruction by instruction until it is unique. Copied to the clipboard. |
 | Create signature (CODE style) | Same, as `\x48\x8B\x00\x00\x00\x89\x5C\x24\x08`. |
+| Hash of the signature | FNV-1a (32 bit), CRC-32, XXH32, XXH64 or XXH128 over the signature bytes, e.g. `0xBB86B11C`. Wildcards are hashed as `00`, so the value stays the same between builds. |
 | Search for a signature | Accepts both styles (plus an optional mask such as `xx???xxxx`). Lists every match in the output window and jumps to the first one. |
 
 With a **selection**, the signature covers exactly the selected instructions and reports whether it is unique.
@@ -61,4 +62,4 @@ set PATH=%IDADIR%;%PATH%
 
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE).
+Apache-2.0, see [LICENSE](LICENSE). Bundles [xxHash](https://github.com/Cyan4973/xxHash) 0.8.3 (BSD-2-Clause, `third_party/xxhash`).

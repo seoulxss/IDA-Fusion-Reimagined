@@ -4,16 +4,36 @@
 #include <kernwin.hpp>
 
 #include <functional>
+#include <memory>
+#include <vector>
 
 #include "fusion.h"
 
 namespace {
 
-constexpr const char* ACTION_CREATE_IDA  = "fusion:create_ida";
-constexpr const char* ACTION_CREATE_CODE = "fusion:create_code";
-constexpr const char* ACTION_SEARCH      = "fusion:search";
+using fusion::style_t;
 
-enum mode_t : ushort { MODE_CREATE_IDA = 0, MODE_CREATE_CODE = 1, MODE_SEARCH = 2 };
+struct style_entry_t {
+  style_t     style;
+  const char* action;  // action name
+  const char* label;   // menu label
+  const char* menu;    // popup submenu
+};
+
+// The order here is the order of the radio buttons in the dialog (MODE_SEARCH comes last)
+constexpr style_entry_t STYLES[] = {
+    {style_t::ida,    "fusion:create_ida",    "Create signature (IDA style)",  "Fusion/"},
+    {style_t::code,   "fusion:create_code",   "Create signature (CODE style)", "Fusion/"},
+    {style_t::fnv1a,  "fusion:create_fnv1a",  "FNV-1a (32 bit)",               "Fusion/Hash of signature/"},
+    {style_t::crc32,  "fusion:create_crc32",  "CRC-32",                        "Fusion/Hash of signature/"},
+    {style_t::xxh32,  "fusion:create_xxh32",  "XXH32",                         "Fusion/Hash of signature/"},
+    {style_t::xxh64,  "fusion:create_xxh64",  "XXH64",                         "Fusion/Hash of signature/"},
+    {style_t::xxh128, "fusion:create_xxh128", "XXH128",                        "Fusion/Hash of signature/"},
+};
+constexpr ushort STYLE_COUNT = sizeof(STYLES) / sizeof(STYLES[0]);
+constexpr ushort MODE_SEARCH = STYLE_COUNT;
+
+constexpr const char* ACTION_SEARCH = "fusion:search";
 
 // Keeps the wait box balanced even on early returns
 struct wait_box_t {
@@ -36,25 +56,26 @@ struct action_t : action_handler_t {
 
 struct plugin_ctx_t : public plugmod_t, public event_listener_t {
   fusion::options_t options;
-  ushort            last_mode = MODE_CREATE_IDA;
+  ushort            last_mode = 0;
   qstring           last_search;
 
-  action_t create_ida_handler  { [this] { create_ida(); } };
-  action_t create_code_handler { [this] { create_code(); } };
-  action_t search_handler      { [this] { search(); } };
+  std::vector<std::unique_ptr<action_t>> handlers;  // one per STYLES entry, then search
 
   plugin_ctx_t() {
-    register_action(ACTION_DESC_LITERAL_PLUGMOD(ACTION_CREATE_IDA,  "Create signature (IDA style)",  &create_ida_handler,  this, nullptr, nullptr, -1));
-    register_action(ACTION_DESC_LITERAL_PLUGMOD(ACTION_CREATE_CODE, "Create signature (CODE style)", &create_code_handler, this, nullptr, nullptr, -1));
-    register_action(ACTION_DESC_LITERAL_PLUGMOD(ACTION_SEARCH,      "Search for signature...",       &search_handler,      this, nullptr, nullptr, -1));
+    for (const style_entry_t& e : STYLES) {
+      handlers.push_back(std::make_unique<action_t>([this, s = e.style] { create(s); }));
+      register_action(ACTION_DESC_LITERAL_PLUGMOD(e.action, e.label, handlers.back().get(), this, nullptr, nullptr, -1));
+    }
+    handlers.push_back(std::make_unique<action_t>([this] { search(); }));
+    register_action(ACTION_DESC_LITERAL_PLUGMOD(ACTION_SEARCH, "Search for signature...", handlers.back().get(), this, nullptr, nullptr, -1));
 
     hook_event_listener(HT_UI, this);
   }
 
   ~plugin_ctx_t() override {
     unhook_event_listener(HT_UI, this);
-    unregister_action(ACTION_CREATE_IDA);
-    unregister_action(ACTION_CREATE_CODE);
+    for (const style_entry_t& e : STYLES)
+      unregister_action(e.action);
     unregister_action(ACTION_SEARCH);
   }
 
@@ -65,9 +86,9 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
       TPopupMenu* popup = va_arg(va, TPopupMenu*);
 
       if (get_widget_type(widget) == BWN_DISASM) {
-        attach_action_to_popup(widget, popup, ACTION_CREATE_IDA,  "Fusion/");
-        attach_action_to_popup(widget, popup, ACTION_CREATE_CODE, "Fusion/");
-        attach_action_to_popup(widget, popup, ACTION_SEARCH,      "Fusion/");
+        for (const style_entry_t& e : STYLES)
+          attach_action_to_popup(widget, popup, e.action, e.menu);
+        attach_action_to_popup(widget, popup, ACTION_SEARCH, "Fusion/");
       }
     }
     return 0;
@@ -84,6 +105,11 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
         "Fusion\n\n"
         "<Create signature (IDA style, 48 8B ? ?):R>\n"
         "<Create signature (CODE style, \\x48\\x8B\\x00\\x00):R>\n"
+        "<Hash of the signature: FNV-1a (32 bit):R>\n"
+        "<Hash of the signature: CRC-32:R>\n"
+        "<Hash of the signature: XXH32:R>\n"
+        "<Hash of the signature: XXH64:R>\n"
+        "<Hash of the signature: XXH128:R>\n"
         "<Search for a signature:R>>\n\n"
         "<Wildcard 32 bit displacements ([reg+disp32]):C>\n"
         "<Wildcard 32/64 bit immediates:C>>\n\n";
@@ -96,16 +122,12 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     options.wildcard_displ   = (toggles & 1) != 0;
     options.wildcard_imm     = (toggles & 2) != 0;
 
-    switch (mode) {
-      case MODE_CREATE_IDA:  create_ida();  break;
-      case MODE_CREATE_CODE: create_code(); break;
-      case MODE_SEARCH:      search();      break;
-    }
+    if (mode == MODE_SEARCH)
+      search();
+    else if (mode < STYLE_COUNT)
+      create(STYLES[mode].style);
     return true;
   }
-
-  void create_ida()  { create(fusion::style_t::ida); }
-  void create_code() { create(fusion::style_t::code); }
 
   void create(fusion::style_t style) {
     const ea_t ea = get_screen_ea();
@@ -140,15 +162,14 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
       return;
     }
 
-    const std::string ida_sig  = fusion::format(result.pattern, fusion::style_t::ida);
-    const std::string code_sig = fusion::format(result.pattern, fusion::style_t::code);
-    const std::string& chosen  = style == fusion::style_t::ida ? ida_sig : code_sig;
+    const std::string chosen = fusion::format(result.pattern, style);
 
     const ea_t origin = has_selection ? sel_start : ea;
     msg("[Fusion] Signature for 0x%llX (%d bytes, %d instructions)\n",
         (unsigned long long)origin, (int)result.pattern.size(), (int)result.insn_count);
-    msg("[Fusion] IDA : %s\n", ida_sig.c_str());
-    msg("[Fusion] CODE: %s\n", code_sig.c_str());
+    for (const style_entry_t& e : STYLES)
+      msg("[Fusion] %-6s: %s%s\n", fusion::style_name(e.style), fusion::format(result.pattern, e.style).c_str(),
+          e.style == style ? "   <- copied" : "");
 
     if (result.unique) {
       msg("[Fusion] Unique\n");
