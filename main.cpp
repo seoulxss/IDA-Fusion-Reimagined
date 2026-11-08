@@ -261,6 +261,22 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     return chosen;
   }
 
+  // How to get from a match of an XREF signature to the function: the signature starts at the call/jump, whose
+  // 32 bit displacement is relative to the end of the instruction. Verified against the real target here.
+  static std::string resolve_text(ea_t site, ea_t target) {
+    size_t rel = 0, len = 0;
+    if (!fusion::describe_branch(site, rel, len))
+      return "resolve: not a direct call/jump with an encoded displacement (indirect), cannot be resolved this way";
+
+    const int32 disp     = (int32)get_dword(site + rel);
+    const ea_t  computed = site + len + (ea_t)(int64)disp;
+
+    char buf[256];
+    qsnprintf(buf, sizeof(buf), "resolve: target = match + %d + int32 at (match + %d)   -> 0x%llX (%s)", (int)len,
+              (int)rel, (unsigned long long)computed, computed == target ? "checked, this is the function" : "DOES NOT MATCH");
+    return buf;
+  }
+
   static void copy(const std::string& text) {
     if (fusion::copy_to_clipboard(text))
       msg("[Fusion] Copied to clipboard\n");
@@ -394,22 +410,21 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     for (size_t i = 0; i < rows.size() && i < MAX_LISTED; ++i) {
       qstring     name;
       get_func_name(&name, rows[i].site);
-      size_t rel = 0, len = 0;
-      char   where[64] = "";
-      if (fusion::describe_branch(rows[i].site, rel, len))
-        qsnprintf(where, sizeof(where), "  [rel32 at +%d, instruction %d bytes]", (int)rel, (int)len);
-
-      msg("[Fusion] XREF %d  0x%llX %s%s\n", (int)(i + 1), (unsigned long long)rows[i].site,
-          name.empty() ? "" : name.c_str(), where);
-      msg("[Fusion]   %s\n", fusion::format(rows[i].sig.pattern, STYLES[first].style, options).c_str());
+      msg("[Fusion] XREF %d  call site 0x%llX in %s\n", (int)(i + 1), (unsigned long long)rows[i].site,
+          name.empty() ? "?" : name.c_str());
+      msg("[Fusion]   signature: %s\n", fusion::format(rows[i].sig.pattern, STYLES[first].style, options).c_str());
+      msg("[Fusion]   %s\n", resolve_text(rows[i].site, target).c_str());
     }
     if (rows.size() > MAX_LISTED)
       msg("[Fusion] ... and %d more\n", (int)(rows.size() - MAX_LISTED));
 
     msg("[Fusion] %d of %d call site(s) have a unique signature (%.3fs), shortest first\n", (int)rows.size(),
         (int)sites.size(), seconds_since(t0));
-    msg("[Fusion] The shortest one (XREF 1, %d bytes):\n", (int)rows[0].sig.pattern.size());
-    copy(print_outputs(rows[0].sig, outputs));
+    msg("[Fusion] The shortest one (XREF 1, %d bytes) finds the CALL SITE, not the function itself:\n",
+        (int)rows[0].sig.pattern.size());
+    const std::string clip = print_outputs(rows[0].sig, outputs);
+    msg("[Fusion] %s\n", resolve_text(rows[0].site, target).c_str());
+    copy(clip);
 
     trim_cache();
     beep(beep_default);

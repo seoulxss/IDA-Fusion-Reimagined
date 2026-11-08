@@ -156,8 +156,16 @@ int main(int argc, char** argv) {
           printf("XREF MISMATCH site 0x%llX: %zu hits\n", (unsigned long long)site, hits.size());
         }
         size_t rel = 0, len = 0;
-        if (fusion::describe_branch(site, rel, len) && rel < len)
+        if (fusion::describe_branch(site, rel, len) && rel < len) {
           ++with_branch_info;
+          // The documented formula: target = match + instruction size + int32 at (match + rel)
+          const ea_t resolved = site + len + (ea_t)(int64)(int32)get_dword(site + rel);
+          if (resolved != f->start_ea) {
+            ++xref_mismatches;
+            printf("RESOLVE MISMATCH site 0x%llX: got 0x%llX, expected 0x%llX\n", (unsigned long long)site,
+                   (unsigned long long)resolved, (unsigned long long)f->start_ea);
+          }
+        }
       }
     }
     printf("xref: %zu functions, %zu call sites, %zu unique, %zu mismatches, %zu with rel32 info\n", funcs_with_refs,
