@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 
+#include "dialog_form.h"
 #include "fusion.h"
 
 namespace {
@@ -98,24 +99,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     ushort mode    = last_mode;
     ushort toggles = (options.wildcard_displ ? 1 : 0) | (options.wildcard_imm ? 2 : 0);
 
-    // clang-format off
-    static const char form[] =
-        "STARTITEM 0\n"
-        "BUTTON YES* Run\n"
-        "Fusion\n\n"
-        "<Create signature (IDA style, 48 8B ? ?):R>\n"
-        "<Create signature (CODE style, \\x48\\x8B\\x00\\x00):R>\n"
-        "<Hash of the signature: FNV-1a (32 bit):R>\n"
-        "<Hash of the signature: CRC-32:R>\n"
-        "<Hash of the signature: XXH32:R>\n"
-        "<Hash of the signature: XXH64:R>\n"
-        "<Hash of the signature: XXH128:R>\n"
-        "<Search for a signature:R>>\n\n"
-        "<Wildcard 32 bit displacements ([reg+disp32]):C>\n"
-        "<Wildcard 32/64 bit immediates:C>>\n\n";
-    // clang-format on
-
-    if (ask_form(form, &mode, &toggles) <= 0)
+    if (ask_form(fusion::DIALOG_FORM, &mode, &toggles) <= 0)
       return true;
 
     last_mode                = mode;

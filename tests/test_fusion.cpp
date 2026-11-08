@@ -1,4 +1,5 @@
 // Logic tests for the parts of the engine that do not need a running IDA.
+#include "../dialog_form.h"
 #include "../fusion.h"
 #include <cstdio>
 
@@ -68,6 +69,34 @@ int main() {
   // the real byte behind a wildcard must not leak into the hash
   pattern_t w2 = w; w2.bytes[1] = 0xAA;
   CHECK(format(w, style_t::xxh64) == format(w2, style_t::xxh64));
+
+  // The dialog string: ask_form() refuses a malformed one silently, so check what is known to break it.
+  {
+    const std::string form = fusion::DIALOG_FORM;
+    size_t items = 0, radios = 0, checks = 0;
+    for (size_t i = 0; (i = form.find('<', i)) != std::string::npos;) {
+      size_t end = form.find('>', i);
+      CHECK(end != std::string::npos);
+      std::string item = form.substr(i + 1, end - i - 1);   // label:type
+      size_t colon = item.rfind(':');
+      CHECK(colon != std::string::npos);
+      std::string label = item.substr(0, colon), type = item.substr(colon + 1);
+      CHECK(label.find(':') == std::string::npos);          // ':' separates label and type
+      CHECK(label.find('#') == std::string::npos);          // '#' delimits hints
+      CHECK(label.find('<') == std::string::npos && label.find('>') == std::string::npos);
+      CHECK(type == "R" || type == "C");
+      radios += type == "R";
+      checks += type == "C";
+      ++items;
+      i = end + 1;
+    }
+    CHECK(items == 10 && radios == 8 && checks == 2);
+    // one closed group per type: the last item of each group is followed by a second '>'
+    size_t closers = 0;
+    for (size_t i = 0; (i = form.find(">>", i)) != std::string::npos; i += 2)
+      ++closers;
+    CHECK(closers == 2);
+  }
 
   printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
   return failures != 0;
