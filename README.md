@@ -54,10 +54,10 @@ cmake -B build -G Ninja -DFUSION_BUILD_TESTS=ON
 cmake --build build
 set IDADIR=C:\Program Files\IDA Professional 9.5
 set PATH=%IDADIR%;%PATH%
-build\..usion_headless.exe C:\path	oinary.exe 1000
+%IDABIN%\fusion_headless.exe C:\path\to\binary.exe 1000
 ```
 
-(`fusion_headless.exe` is written to `%IDABIN%`, by default `%IDASDK%\srcin`.)
+(`fusion_headless.exe` is written to `%IDABIN%`, by default `%IDASDK%\src\bin`.)
 
 ## License
 
