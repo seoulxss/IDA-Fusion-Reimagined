@@ -1,1 +1,10 @@
+build/
+out/
+obj/
 *.dll
+*.obj
+*.o
+*.lib
+*.exp
+.vs/
+.vscode/
