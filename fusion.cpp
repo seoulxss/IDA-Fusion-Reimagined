@@ -5,6 +5,8 @@
 #include <cstring>
 
 #include <fixup.hpp>
+#include <funcs.hpp>
+#include <xref.hpp>
 #include <kernwin.hpp>
 
 #ifdef _WIN32
@@ -144,6 +146,8 @@ bool generate(const image_t& image, ea_t start, const options_t& opt, generated_
   bool              seeded = false;
   size_t            pending_from = 0;  // first pattern byte not yet verified against the candidates
 
+  const ea_t func = opt.stay_in_function ? get_func_start(start) : BADADDR;  // BADADDR: not in a function
+
   ea_t ea = start;
   while (out.pattern.size() < opt.max_bytes) {
     if (user_cancelled()) {
@@ -201,6 +205,10 @@ bool generate(const image_t& image, ea_t start, const options_t& opt, generated_
     }
 
     ea += insn.size;
+    if (func != BADADDR && get_func_start(ea) != func) {
+      out.note = "reached the end of the function before the signature became unique";
+      break;
+    }
     if (!is_code(get_flags(ea))) {
       out.note = "reached the end of the code before the signature became unique";
       break;
@@ -235,7 +243,7 @@ bool generate_range(const image_t& image, ea_t start, ea_t end, const options_t&
     ea += insn.size;
   }
 
-  out.pattern.trim();
+  // Not trimmed: these are exactly the bytes the user selected
   if (out.pattern.empty())
     return false;
 
@@ -248,6 +256,47 @@ bool generate_range(const image_t& image, ea_t start, ea_t end, const options_t&
   out.other_matches = others;
   out.unique        = others == 0;
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// xrefs
+// ---------------------------------------------------------------------------
+
+std::vector<ea_t> code_xrefs_to(ea_t target, size_t* data_refs) {
+  std::vector<ea_t> sites;
+  size_t            data = 0;
+
+  xrefblk_t xb;
+  for (bool ok = xb.first_to(target, XREF_ALL); ok; ok = xb.next_to()) {
+    if (xb.iscode && xb.type != fl_F)  // fl_F is ordinary flow into the function, not a reference
+      sites.push_back(xb.from);
+    else if (!xb.iscode)
+      ++data;
+  }
+
+  std::sort(sites.begin(), sites.end());
+  sites.erase(std::unique(sites.begin(), sites.end()), sites.end());
+  if (data_refs)
+    *data_refs = data;
+  return sites;
+}
+
+bool describe_branch(ea_t site, size_t& rel_offset, size_t& insn_size) {
+  insn_t insn;
+  if (decode_insn(&insn, site) <= 0)
+    return false;
+
+  for (int n = 0; n < UA_MAXOP; ++n) {
+    const op_t& op = insn.ops[n];
+    if (op.type == o_void)
+      break;
+    if ((op.type == o_near || op.type == o_far) && op.offb != 0) {
+      rel_offset = op.offb;
+      insn_size  = insn.size;
+      return true;
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------

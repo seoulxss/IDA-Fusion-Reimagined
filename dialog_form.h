@@ -13,13 +13,14 @@
 // form-change callback together with a third button; the previous radio + checkbox layout was fine.
 //
 // Arguments, in order:
-//   ushort* action   (radio group: 0 = create, 1 = search)
+//   ushort* action   (radio group: 0 = create, 1 = search, 2 = XREFs of the function)
 //   ushort* outputs  (checkbox group, one checkbox per entry of STYLES in main.cpp, same order)
-//   ushort* options  (checkbox group)
+//   ushort* options  (checkbox group, bits OPT_* in main.cpp, same order)
 
 namespace fusion {
 
 inline constexpr int DIALOG_OUTPUT_COUNT = 7;
+inline constexpr int DIALOG_OPTION_COUNT = 6;
 
 // clang-format off
 inline constexpr const char DIALOG_FORM[] =
@@ -27,7 +28,8 @@ inline constexpr const char DIALOG_FORM[] =
     "BUTTON YES* Run\n"
     "Fusion\n\n"
     "<Create (the ticked outputs below):R>\n"
-    "<Search for a pattern in the database:R>>\n\n"
+    "<Search for a pattern in the database:R>\n"
+    "<Signatures for the XREFs to this function (call sites):R>>\n\n"
     "<Signature (IDA style):C>\n"
     "<Signature (CODE style):C>\n"
     "<Hash of signature - FNV-1a (32 bit):C>\n"
@@ -37,7 +39,10 @@ inline constexpr const char DIALOG_FORM[] =
     "<Hash of signature - XXH128:C>>\n\n"
     "<Wildcard 32 bit displacements:C>\n"
     "<Wildcard 32/64 bit immediates:C>\n"
-    "<Only scan executable segments (faster):C>>\n\n";
+    "<Only scan executable segments (faster):C>\n"
+    "<Stay inside the function:C>\n"
+    "<IDA style - use ?? as wildcard:C>\n"
+    "<CODE style - always append the mask (xx??):C>>\n\n";
 // clang-format on
 
 }  // namespace fusion

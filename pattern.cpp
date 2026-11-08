@@ -97,12 +97,20 @@ static std::string format_hash(const pattern_t& pat, style_t style) {
 }
 
 std::string format(const pattern_t& pat, style_t style) {
+  return format(pat, style, options_t());
+}
+
+std::string format(const pattern_t& pat, style_t style, const options_t& opt) {
   if (is_hash(style))
     return format_hash(pat, style);
 
   static const char hex[] = "0123456789ABCDEF";
   std::string out;
-  out.reserve(pat.size() * 4);
+  out.reserve(pat.size() * 5);
+
+  bool has_real_zero = false;
+  for (size_t i = 0; i < pat.size(); ++i)
+    has_real_zero |= pat.fixed[i] && pat.bytes[i] == 0;
 
   for (size_t i = 0; i < pat.size(); ++i) {
     if (style == style_t::ida) {
@@ -112,7 +120,7 @@ std::string format(const pattern_t& pat, style_t style) {
         out += hex[pat.bytes[i] >> 4];
         out += hex[pat.bytes[i] & 0xF];
       } else {
-        out += '?';
+        out += opt.double_question ? "??" : "?";
       }
     } else {
       out += "\\x";
@@ -123,6 +131,13 @@ std::string format(const pattern_t& pat, style_t style) {
         out += "00";
       }
     }
+  }
+
+  // "\x00" is the wildcard of a CODE style signature, so a real zero byte needs the mask to stay unambiguous
+  if (style == style_t::code && (opt.code_mask || has_real_zero)) {
+    out += ' ';
+    for (size_t i = 0; i < pat.size(); ++i)
+      out += pat.fixed[i] ? 'x' : '?';
   }
   return out;
 }

@@ -130,6 +130,41 @@ int main(int argc, char** argv) {
     printf("avg signature length: %.1f bytes, longest %zu\n", (double)sum_len / unique, longest);
   printf("generation: %lld ms\n", (long long)std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 
+  // XREF signatures: every call site of the first functions that have any
+  {
+    size_t funcs_with_refs = 0, sites_total = 0, sites_unique = 0, xref_mismatches = 0, with_branch_info = 0;
+    for (size_t i = 0; i < qty && funcs_with_refs < 100; ++i) {
+      func_t* f = getn_func(i);
+      if (!f)
+        continue;
+      size_t data_refs = 0;
+      std::vector<ea_t> sites = fusion::code_xrefs_to(f->start_ea, &data_refs);
+      if (sites.empty())
+        continue;
+      ++funcs_with_refs;
+
+      for (ea_t site : sites) {
+        ++sites_total;
+        fusion::generated_t g;
+        if (!is_code(get_flags(site)) || !fusion::generate(image, site, opt, g) || !g.unique)
+          continue;
+        ++sites_unique;
+
+        std::vector<ea_t> hits = image.find(g.pattern);
+        if (hits.size() != 1 || hits[0] != site) {
+          ++xref_mismatches;
+          printf("XREF MISMATCH site 0x%llX: %zu hits\n", (unsigned long long)site, hits.size());
+        }
+        size_t rel = 0, len = 0;
+        if (fusion::describe_branch(site, rel, len) && rel < len)
+          ++with_branch_info;
+      }
+    }
+    printf("xref: %zu functions, %zu call sites, %zu unique, %zu mismatches, %zu with rel32 info\n", funcs_with_refs,
+           sites_total, sites_unique, xref_mismatches, with_branch_info);
+    mismatches += xref_mismatches;
+  }
+
   // Sample output
   if (qty) {
     func_t* f = getn_func(qty / 2);

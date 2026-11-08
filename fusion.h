@@ -29,7 +29,13 @@ struct options_t {
   bool wildcard_displ = true;   // wildcard 32 bit displacements ([reg+disp32])
   bool wildcard_imm   = false;  // wildcard every 32/64 bit immediate (offset operands are always wildcarded)
   bool code_only      = false;  // only look at executable segments (faster, but data is not searched)
+  bool stay_in_function = true; // do not extend a signature past the end of its function
   size_t max_bytes    = 512;    // give up after this many bytes
+
+  // Output format
+  bool double_question = false; // IDA style: "??" instead of "?"
+  bool code_mask       = false; // CODE style: always append the mask ("xx??x"); otherwise only when a real
+                                // 00 byte is in the signature, because \x00 alone would read as a wildcard
 };
 
 // A byte pattern; fixed[i] == 0 means "any byte".
@@ -43,7 +49,8 @@ struct pattern_t {
   void trim();  // remove wildcards at the front and at the back
 };
 
-std::string format(const pattern_t& pat, style_t style);
+std::string format(const pattern_t& pat, style_t style, const options_t& opt);
+std::string format(const pattern_t& pat, style_t style);  // default options
 
 // Accepts IDA style ("48 8B ? ? 05", "48 8B ?? ?? 05") and CODE style
 // ("\x48\x8B\x00\x00\x05", optionally followed by a mask like "xx??x").
@@ -94,8 +101,16 @@ struct generated_t {
 // instruction until it matches nowhere else.
 bool generate(const image_t& image, ea_t start, const options_t& opt, generated_t& out);
 
-// Signature for exactly the instructions in [start, end).
+// Signature for exactly the instructions in [start, end). Nothing is trimmed: the user picked these bytes.
 bool generate_range(const image_t& image, ea_t start, ea_t end, const options_t& opt, generated_t& out);
+
+// Code references (calls and jumps, no plain fall-through) to `target`, sorted and without duplicates.
+// `data_refs` (optional) receives the number of data references, e.g. a vtable entry.
+std::vector<ea_t> code_xrefs_to(ea_t target, size_t* data_refs = nullptr);
+
+// Where the relative target of the call/jump at `site` is encoded: offset of the rel32 and the length of the
+// instruction. False if it is not a direct call/jump with an encoded displacement.
+bool describe_branch(ea_t site, size_t& rel_offset, size_t& insn_size);
 
 bool copy_to_clipboard(const std::string& text);
 

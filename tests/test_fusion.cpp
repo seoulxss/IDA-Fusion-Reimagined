@@ -60,6 +60,30 @@ int main() {
   t.trim();
   CHECK(t.size() == 1 && t.bytes[0] == 1);
 
+  // output options
+  {
+    options_t o;
+    pattern_t a, z;
+    parse("48 8B ? ? 05", a, err);
+    CHECK(format(a, style_t::ida, o) == "48 8B ? ? 05");
+    o.double_question = true;
+    CHECK(format(a, style_t::ida, o) == "48 8B ?? ?? 05");
+    o = options_t();
+    CHECK(format(a, style_t::code, o) == "\\x48\\x8B\\x00\\x00\\x05");   // no real 00: no mask needed
+    o.code_mask = true;
+    CHECK(format(a, style_t::code, o) == "\\x48\\x8B\\x00\\x00\\x05 xx??x");
+
+    // a real zero byte would read back as a wildcard, so the mask is added on its own
+    parse("48 00 05 ? 90", z, err);
+    CHECK(z.fixed[1] == 1);
+    o = options_t();
+    const std::string zc = format(z, style_t::code, o);
+    CHECK(zc == "\\x48\\x00\\x05\\x00\\x90 x?x?x" || zc == "\\x48\\x00\\x05\\x00\\x90 xxx?x");
+    pattern_t back;
+    CHECK(parse(zc.c_str(), back, err));
+    CHECK(back.fixed == z.fixed);                                       // the real 00 survived the round trip
+  }
+
   // hashes: published check values for "123456789"
   parse("31 32 33 34 35 36 37 38 39", p, err);
   CHECK(format(p, style_t::fnv1a) == "0xBB86B11C");
@@ -97,8 +121,8 @@ int main() {
       ++items;
       i = end + 1;
     }
-    CHECK(items == 12 && radios == 2 && checks == 10);
-    CHECK(fusion::DIALOG_OUTPUT_COUNT == 7);
+    CHECK(items == 16 && radios == 3 && checks == 13);
+    CHECK(fusion::DIALOG_OUTPUT_COUNT == 7 && fusion::DIALOG_OPTION_COUNT == 6);
     // the layout that crashed IDA 9.5: a form-change callback together with a third button
     CHECK(form.find("%/") == std::string::npos);
     CHECK(form.find("BUTTON NO") == std::string::npos);

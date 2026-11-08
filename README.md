@@ -20,6 +20,20 @@ and press **Run**. The entries of the context menu create a single output each.
 | CODE style | `\x48\x8B\x00\x00\x00\x89\x5C\x24\x08` |
 | Hashes | `0xBB86B11C`, `0x8CB841DB40E6AE83`, ... over the signature bytes. Wildcards are hashed as `00`, so the value stays the same between builds. |
 
+All settings of the dialog are remembered between IDA sessions (stored in IDA's per-user registry). Options:
+wildcard 32 bit displacements / immediates, scan executable segments only, **stay inside the function** (a signature
+is not extended past the end of its function; on by default), `??` instead of `?` in IDA style, and always append the
+mask to CODE style (a real `00` byte gets the mask on its own, otherwise it would read back as a wildcard).
+
+### XREF signatures
+
+When a function has no unique start, choose **Signatures for the XREFs to this function** (or the entry in the context
+menu). Every call/jump to the function gets a signature that starts at the call instruction and is extended until
+it is unique; they are listed shortest first, with the containing function and where the rel32 sits
+(`[rel32 at +1, instruction 5 bytes]`), and the shortest is copied. Resolve the target as
+`address of the match + instruction size + rel32`. A function that is only reached through a vtable has no code
+XREFs; the plugin says so instead of failing silently.
+
 ### Search pattern
 
 The option in the dialog or *Fusion > Search for signature...* in the context menu asks for a pattern, scans the
@@ -31,7 +45,7 @@ whole database, lists every match in the output window and jumps there if there 
 
 A hash cannot be searched for (it is one way).
 
-With a **selection**, the signature covers exactly the selected instructions and reports whether it is unique.
+With a **selection**, the signature covers exactly the selected instructions (nothing is trimmed) and reports whether it is unique.
 
 Wildcards: relative calls/jumps (rel32), RIP-relative and absolute addresses, offset operands, and (optional)
 32 bit displacements and immediates. Without a mask, a `\x00` in a CODE style signature is a wildcard.
