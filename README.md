@@ -214,6 +214,13 @@ set PATH=%IDADIR%;%PATH%
 
 (`fusion_headless.exe` is written to `%IDABIN%`, by default `%IDASDK%\src\bin`.)
 
+## Credits
+
+- **senator715**: the original [IDA-Fusion](https://github.com/senator715/IDA-Fusion), which this project is based on.
+- **K4ryuu**: the maintained fork [IDA-Fusion-Enhanced](https://github.com/K4ryuu/IDA-Fusion-Enhanced). The ideas for
+  signatures from the XREFs of a function, remembered settings, stopping at the end of the function and the mask for
+  CODE style signatures come from there. They are re-implemented here on a new engine; no code was copied.
+
 ## License
 
 Apache-2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE). Copyright 2026 seoulxss. Based on
