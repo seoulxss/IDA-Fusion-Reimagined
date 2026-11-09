@@ -1,3 +1,7 @@
+// Copyright 2026 seoulxss
+// Licensed under the Apache License, Version 2.0, see LICENSE and NOTICE.
+// Based on IDA-Fusion by senator715 (Apache-2.0); substantially modified, see the git history.
+
 // Headless check of the signature engine against a real database (idalib).
 //   fusion_headless <binary> [max_functions]
 //

@@ -1,3 +1,7 @@
+// Copyright 2026 seoulxss
+// Licensed under the Apache License, Version 2.0, see LICENSE and NOTICE.
+// Based on IDA-Fusion by senator715 (Apache-2.0); substantially modified, see the git history.
+
 #pragma once
 
 // IDA-Fusion signature engine (IDA 9.x)
