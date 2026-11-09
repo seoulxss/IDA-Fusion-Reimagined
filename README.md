@@ -25,6 +25,8 @@ Right-click in the disassembly view also gives a **Fusion** submenu with the sam
 
 ## The dialog
 
+<p align="center"><img src="pictures/dialog.png" alt="The Fusion dialog in IDA: action, outputs and options" width="330"></p>
+
 Everything you choose is remembered between IDA sessions.
 
 **Action** (pick one)
@@ -89,6 +91,8 @@ searched for**; it is one way and has no bytes in it.
 
 Some functions begin with bytes that occur all over the program (`push rbx; sub rsp, 20h`), so no signature of the
 function start is unique. Then use a place that **calls** the function instead.
+
+![The XREF output in IDA: the shortest signature, the resolve line and the C++ line](pictures/xref-output.png)
 
 Choose **Signatures for the XREFs to this function** with the cursor anywhere in the function. Every call or jump to
 it gets a signature that starts at the call instruction and is extended until it is unique:
