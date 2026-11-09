@@ -90,6 +90,12 @@ int main() {
   CHECK(cpp_resolve_line(2, 6).find("match + 6 + ") != std::string::npos &&
         cpp_resolve_line(2, 6).find("(match + 2)") != std::string::npos);
   CHECK(cpp_resolve_line(1, 5).find("(std::") == std::string::npos);     // no C style cast like (std::int32_t)
+  // the width of the displacement follows the instruction: short jumps have one byte, never read four
+  CHECK(cpp_resolve_line(1, 2).find("std::int8_t") != std::string::npos);
+  CHECK(cpp_resolve_line(1, 2).find("std::int32_t") == std::string::npos);
+  CHECK(cpp_resolve_line(2, 6).find("std::int32_t") != std::string::npos);   // 0F 8x near conditional jump
+  CHECK(cpp_resolve_line(1, 3).empty());                                     // 16 bit displacement: not guessed
+  CHECK(cpp_resolve_line(5, 5).empty());
 
   // hashes: published check values for "123456789"
   parse("31 32 33 34 35 36 37 38 39", p, err);

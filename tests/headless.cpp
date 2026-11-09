@@ -132,8 +132,8 @@ int main(int argc, char** argv) {
 
   // XREF signatures: every call site of the first functions that have any
   {
-    size_t funcs_with_refs = 0, sites_total = 0, sites_unique = 0, xref_mismatches = 0, with_branch_info = 0;
-    for (size_t i = 0; i < qty && funcs_with_refs < 100; ++i) {
+    size_t short_jumps = 0, funcs_with_refs = 0, sites_total = 0, sites_unique = 0, xref_mismatches = 0, with_branch_info = 0;
+    for (size_t i = 0; i < qty && funcs_with_refs < 100000; ++i) {
       func_t* f = getn_func(i);
       if (!f)
         continue;
@@ -159,7 +159,13 @@ int main(int argc, char** argv) {
         if (fusion::describe_branch(site, rel, len) && rel < len) {
           ++with_branch_info;
           // The documented formula: target = match + instruction size + int32 at (match + rel)
-          const ea_t resolved = site + len + (ea_t)(int64)(int32)get_dword(site + rel);
+          const size_t width = len - rel;
+          if (width == 1)
+            ++short_jumps;
+          const int64 disp     = width == 1 ? (int64)(int8)get_byte(site + rel) : (int64)(int32)get_dword(site + rel);
+          const ea_t  resolved = site + len + (ea_t)disp;
+          if (width != 1 && width != 4)
+            printf("odd displacement width %zu at 0x%llX\n", width, (unsigned long long)site);
           if (resolved != f->start_ea) {
             ++xref_mismatches;
             printf("RESOLVE MISMATCH site 0x%llX: got 0x%llX, expected 0x%llX\n", (unsigned long long)site,
@@ -168,8 +174,8 @@ int main(int argc, char** argv) {
         }
       }
     }
-    printf("xref: %zu functions, %zu call sites, %zu unique, %zu mismatches, %zu with rel32 info\n", funcs_with_refs,
-           sites_total, sites_unique, xref_mismatches, with_branch_info);
+    printf("xref: %zu functions, %zu call sites, %zu unique, %zu mismatches, %zu with displacement info (%zu short jumps)\n", funcs_with_refs,
+           sites_total, sites_unique, xref_mismatches, with_branch_info, short_jumps);
     mismatches += xref_mismatches;
   }
 

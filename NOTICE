@@ -1,0 +1,19 @@
+IDA-Fusion-Reimagined
+Copyright 2026 seoulxss
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This project is a modified version of IDA-Fusion by senator715 (2022),
+https://github.com/senator715/IDA-Fusion, which is licensed under the Apache License,
+Version 2.0. The signature engine, the plugin and the build were rewritten for IDA Pro 9.x;
+the changes are recorded in the git history, starting from the original release.
+
+Ideas for the XREF signatures, the remembered settings and the function boundary option were
+taken from the maintained fork https://github.com/K4ryuu/IDA-Fusion-Enhanced and
+re-implemented here.
+
+Third party code included in this repository:
+
+  xxHash 0.8.3 (third_party/xxhash)
+  Copyright (C) 2012-2021 Yann Collet
+  BSD 2-Clause License, see third_party/xxhash/LICENSE

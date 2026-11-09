@@ -101,9 +101,18 @@ std::string format(const pattern_t& pat, style_t style) {
 }
 
 std::string cpp_resolve_line(size_t rel_offset, size_t insn_size) {
+  // The displacement is the last part of the instruction: E8/E9/0F 8x have 4 bytes, short jumps (EB, 7x) have 1.
+  // Anything else (16 bit code) is not handled rather than guessed.
+  if (rel_offset >= insn_size)
+    return std::string();
+  const size_t width = insn_size - rel_offset;
+  const char*  type  = width == 4 ? "std::int32_t" : width == 1 ? "std::int8_t" : nullptr;
+  if (!type)
+    return std::string();
+
   // A negative displacement converts to a huge unsigned value; adding it wraps around to the right address.
   return "const std::uintptr_t target = match + " + std::to_string(insn_size) +
-         " + static_cast<std::uintptr_t>(*reinterpret_cast<const std::int32_t*>(match + " +
+         " + static_cast<std::uintptr_t>(*reinterpret_cast<const " + type + "*>(match + " +
          std::to_string(rel_offset) + "));";
 }
 

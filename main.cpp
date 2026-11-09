@@ -268,11 +268,23 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     if (!fusion::describe_branch(site, rel, len))
       return "resolve: not a direct call/jump with an encoded displacement (indirect), cannot be resolved this way";
 
-    const int32 disp     = (int32)get_dword(site + rel);
-    const ea_t  computed = site + len + (ea_t)(int64)disp;
+    // The displacement is the last part of the instruction: 4 bytes for E8/E9/0F 8x, 1 byte for short jumps
+    const size_t width = len > rel ? len - rel : 0;
+    int64        disp  = 0;
+    const char*  type  = nullptr;
+    if (width == 4) {
+      disp = (int32)get_dword(site + rel);
+      type = "int32";
+    } else if (width == 1) {
+      disp = (int8)get_byte(site + rel);
+      type = "int8";
+    } else {
+      return "resolve: unusual displacement size, cannot be resolved this way";
+    }
+    const ea_t computed = site + len + (ea_t)disp;
 
     char buf[256];
-    qsnprintf(buf, sizeof(buf), "resolve: target = match + %d + int32 at (match + %d)   -> 0x%llX (%s)", (int)len,
+    qsnprintf(buf, sizeof(buf), "resolve: target = match + %d + %s at (match + %d)   -> 0x%llX (%s)", (int)len, type,
               (int)rel, (unsigned long long)computed, computed == target ? "checked, this is the function" : "DOES NOT MATCH");
     return buf;
   }
@@ -282,7 +294,9 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     size_t rel = 0, len = 0;
     if (!fusion::describe_branch(site, rel, len))
       return;
-    msg("[Fusion] %sC++: %s\n", indent, fusion::cpp_resolve_line(rel, len).c_str());
+    const std::string line = fusion::cpp_resolve_line(rel, len);
+    if (!line.empty())
+      msg("[Fusion] %sC++: %s\n", indent, line.c_str());
   }
 
   static void copy(const std::string& text) {

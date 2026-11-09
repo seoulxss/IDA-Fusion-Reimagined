@@ -216,5 +216,6 @@ set PATH=%IDADIR%;%PATH%
 
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE). Bundles [xxHash](https://github.com/Cyan4973/xxHash) 0.8.3 (BSD-2-Clause,
-`third_party/xxhash`).
+Apache-2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE). Copyright 2026 seoulxss. Based on
+[senator715/IDA-Fusion](https://github.com/senator715/IDA-Fusion) (Apache-2.0). Bundles
+[xxHash](https://github.com/Cyan4973/xxHash) 0.8.3 (BSD-2-Clause, `third_party/xxhash`).
