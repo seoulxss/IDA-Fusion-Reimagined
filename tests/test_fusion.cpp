@@ -64,6 +64,9 @@ int main() {
   t.trim();
   CHECK(t.size() == 1 && t.bytes[0] == 1);
 
+  // immediates are wildcarded by default (syscall IDs shift between builds), displacements too
+  CHECK(options_t().wildcard_imm && options_t().wildcard_displ);
+
   // output options
   {
     options_t o;

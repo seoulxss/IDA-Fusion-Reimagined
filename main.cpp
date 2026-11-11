@@ -59,6 +59,9 @@ enum : ushort {
 };
 static_assert(fusion::DIALOG_OPTION_COUNT == 6, "dialog has one checkbox per OPT_* bit");
 
+// Version of the stored option bits ("Fusion.options_version"); see load_settings().
+static constexpr int OPTIONS_VERSION = 2;
+
 // Keeps the wait box balanced even on early returns
 struct wait_box_t {
   explicit wait_box_t(const char* text) { show_wait_box("%s", text); }
@@ -130,7 +133,13 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
   void load_settings() {
     last_action  = (ushort)reg_read_int("Fusion.action", ACT_CREATE);
     last_outputs = (ushort)reg_read_int("Fusion.outputs", last_outputs);
-    set_option_bits((ushort)reg_read_int("Fusion.options", option_bits()));
+    // Options version 2 made "wildcard immediates" the default. Bits saved before that carry no
+    // version and the old default (off), so the option is turned on for them once; saving writes the
+    // version, and from then on what the user chose is kept as it is.
+    ushort bits = (ushort)reg_read_int("Fusion.options", option_bits());
+    if (reg_read_int("Fusion.options_version", 1) < OPTIONS_VERSION)
+      bits |= OPT_IMM;
+    set_option_bits(bits);
 
     if (last_action > ACT_XREF)
       last_action = ACT_CREATE;
@@ -141,6 +150,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     reg_write_int("Fusion.action", last_action);
     reg_write_int("Fusion.outputs", last_outputs);
     reg_write_int("Fusion.options", option_bits());
+    reg_write_int("Fusion.options_version", OPTIONS_VERSION);
   }
 
   // --- snapshot ----------------------------------------------------------------------------------------

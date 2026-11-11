@@ -31,7 +31,10 @@ const char* style_name(style_t s);
 
 struct options_t {
   bool wildcard_displ = true;   // wildcard 32 bit displacements ([reg+disp32])
-  bool wildcard_imm   = false;  // wildcard every 32/64 bit immediate (offset operands are always wildcarded)
+  bool wildcard_imm   = true;   // wildcard every 32/64 bit immediate (offset operands are always wildcarded).
+                                // On by default: a syscall stub's ID is an imm32 and the IDs shift between
+                                // builds - kept fixed, 205 of 488 ntdll stub signatures (26100.7920) matched
+                                // exactly one stub in 26100.9711, the wrong one
   bool code_only      = false;  // only look at executable segments (faster, but data is not searched)
   bool stay_in_function = true; // do not extend a signature past the end of its function
   size_t max_bytes    = 512;    // give up after this many bytes

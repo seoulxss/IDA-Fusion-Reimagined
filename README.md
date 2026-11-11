@@ -47,7 +47,7 @@ One ticked output is copied as it is; several are copied one per line with their
 | Option | Meaning |
 |---|---|
 | Wildcard 32 bit displacements | `[reg+disp32]` offsets (struct member offsets) become wildcards. On by default. |
-| Wildcard 32/64 bit immediates | Large constants in instructions become wildcards. Off by default. |
+| Wildcard 32/64 bit immediates | Large constants in instructions become wildcards. On by default: a syscall stub differs from the next one only in its ID, an `imm32`, and the IDs shift between builds. Kept fixed, 205 of 488 ntdll stub signatures from 10.0.26100.7920 matched exactly one stub in 26100.9711 - the wrong one. Wildcarded, a stub gets *NOT unique* instead. Of the other functions, the same share was found again in the newer build; with *Stay inside the function*, about 50 small ntdll functions that only an `imm32` told apart become *NOT unique* as well (4206 -> 3661 unique of 4668, about 495 of the difference being the stubs). Turn it off for a signature you only need in this one build. |
 | Only scan executable segments (faster) | Data segments are not read and not searched. See [How it works](#how-it-works). |
 | Stay inside the function | A signature is never extended past the end of its function. On by default: a signature that runs into the next function breaks as soon as the compiler reorders functions. |
 | IDA style - use ?? as wildcard | Write `??` instead of `?`. |
